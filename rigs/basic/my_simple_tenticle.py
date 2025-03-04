@@ -10,7 +10,7 @@ from typing import Optional
 from rigify.utils.bones import align_chain_x_axis, align_bone_orientation
 from rigify.utils.widgets_basic import create_circle_widget
 from rigify.utils.layers import ControlLayersOption
-from rigify.utils.naming import make_derived_name
+from rigify.utils.naming import make_derived_name, strip_org
 
 from rigify.base_rig import stage
 
@@ -94,29 +94,33 @@ class Rig(TweakChainRig):
     def generate_rot_mch(self):
         if self.separate_rotation:
             org = self.bones.org[0]
-            self.bones.mch.rot = bone = self.copy_bone(org, make_derived_name(org, 'mch'), parent=True)
+            self.bones.mch.rot = self.copy_bone(org, make_derived_name('ROT-' + strip_org(org), 'mch'), parent=True, scale=0.25)
     
     @stage.parent_bones
     def parent_mch_control_bones(self):
-        self.set_bone_parent(self.bones.ctrl.fk[0], self.bones.mch.rot)
+        if self.separate_rotation:
+            self.set_bone_parent(self.bones.ctrl.fk[0], self.bones.mch.rot)
 
     @stage.parent_bones
     def align_mch_follow_bone(self):
-        align_bone_orientation(self.obj, self.bones.mch.rot, 'root')
+        if self.separate_rotation:
+            align_bone_orientation(self.obj, self.bones.mch.rot, 'root')
 
     @stage.configure_bones
     def configure_mch_follow_bones(self):
-        controls = self.bones.ctrl.fk
-        panel = self.script.panel_with_selected_check(self, controls)
-        self.make_property(self.bones.ctrl.fk[0], 'root_follow', default=0.0)
-        panel.custom_prop(self.bones.ctrl.fk[0], 'root_follow', text='root_follow', slider=True)
+        if self.separate_rotation:
+            controls = self.bones.ctrl.fk
+            panel = self.script.panel_with_selected_check(self, controls)
+            self.make_property(self.bones.ctrl.fk[0], 'root_follow', default=0.0)
+            panel.custom_prop(self.bones.ctrl.fk[0], 'root_follow', text='root_follow', slider=True)
 
     @stage.rig_bones
     def rig_mch_follow_bones(self):
-        con = self.make_constraint(self.bones.mch.rot, 'COPY_ROTATION', 'root')
+        if self.separate_rotation:
+            con = self.make_constraint(self.bones.mch.rot, 'COPY_ROTATION', 'root')
 
-        self.make_driver(con, 'influence',
-                         variables=[(self.bones.ctrl.fk[0], 'root_follow')], polynomial=[1, -1])
+            self.make_driver(con, 'influence',
+                            variables=[(self.bones.ctrl.fk[0], 'root_follow')], polynomial=[1, -1])
 
     @classmethod
     def add_parameters(cls, params):
