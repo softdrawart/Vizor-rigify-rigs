@@ -82,7 +82,7 @@ class Rig(BaseRig):
         params.make_controller = bpy.props.BoolProperty("Controller", default=False, description="Create Controller Bone")
         params.make_deformer = bpy.props.BoolProperty("Deformer", default=False, description="Create Deformer Bone")
         params.widget_selection = bpy.props.StringProperty("Widget", description="Widget of controller bone")
-        params.parents = bpy.props.StringProperty("Parents", default="torso, ORG-spine, ORG-spine.003, ORG-spine.006, ORG-shoulder.L, ORG-hand.L", description="Parents for switching separated by , ")
+        params.parents = bpy.props.StringProperty("Parents", default="torso, ORG-hand.L, ORG-hand.R", description="Parents for switching separated by , ")
     
     @classmethod
     def parameters_ui(cls, layout, params):
