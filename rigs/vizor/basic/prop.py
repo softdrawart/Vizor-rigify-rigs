@@ -70,7 +70,7 @@ class Rig(BaseRig):
             self.make_constraint(deform,'COPY_TRANSFORMS', org)
     #generate widget based on the selection from parameter
     def generate_widgets(self):
-        if self.make_controller:
+        if self.make_controller and self.params.widget_selection != '':
             ctrl = self.bones.ctrl
             widget = self.params.widget_selection
             create_registered_widget(self.obj, ctrl, widget)
