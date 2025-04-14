@@ -29,6 +29,7 @@ class Rig(BaseRig):
     make_controller: bool
     make_deformer: bool
     parent_bones_names: list[str]
+    default_parent: str
 
     def find_org_bones(self, bone: PoseBone):
         return bone.name
@@ -37,6 +38,7 @@ class Rig(BaseRig):
         self.make_controller = self.params.make_controller
         self.make_deformer = self.params.make_deformer
         self.parent_bones_names = self.build_list()
+        self.default_parent = self.find_default_parent() #pick a parent from the list or root
     #forms a list of bone names from parameter
     def build_list(self):
         string = self.params.parents
@@ -44,6 +46,14 @@ class Rig(BaseRig):
             parents = [item.strip() for item in string.split(',')]
             return parents
         return []
+    def find_default_parent(self):
+        string = self.params.default_parent
+        if isinstance(string, str):
+            parent = string.replace(" ", "")
+            if self.parent_bones_names:
+                if parent in self.parent_bones_names:
+                    return parent
+        return 'root'
 
     #generate CTRL bones and Switch Parent
     def generate_bones(self):
@@ -55,7 +65,8 @@ class Rig(BaseRig):
                 self.bones.ctrl.pivot = self.copy_bone(org, make_derived_name(org, 'ctrl', '_pivot'))
             pbuild = SwitchParentBuilder(self.generator)
             if len(self.parent_bones_names) > 0:
-                pbuild.build_child(self,ctrl,extra_parents=self.parent_bones_names, select_parent='root', exclude_self=True) #root is selected by default parent
+                
+                pbuild.build_child(self,ctrl,extra_parents=self.parent_bones_names, select_parent=self.default_parent or 'root', exclude_self=True) #root is selected by default parent
             if self.params.inject:
                 parent_rig = self.rigify_parent
                 pbuild.register_parent(self, org, name=ctrl, exclude_self=True, inject_into=parent_rig)
@@ -107,7 +118,9 @@ class Rig(BaseRig):
         params.make_pivot = bpy.props.BoolProperty("Pivot", default=False, description="Create Pivot")
         params.make_deformer = bpy.props.BoolProperty("Deformer", default=False, description="Create Deformer Bone")
         params.widget_selection = bpy.props.StringProperty("Widget", description="Widget of controller bone", default='cube')
-        params.parents = bpy.props.StringProperty("Parents", default="torso, ORG-spine, ORG-spine.003, ORG-spine.006, ORG-shoulder.L, ORG-hand.L", description="Parents for switching separated by , ")
+        params.parents = bpy.props.StringProperty("Parents", default="torso, ORG-spine, ORG-spine.003, " \
+        "ORG-spine.006, ORG-shoulder.L, ORG-hand.L", description="Parents for switching separated by , ")
+        params.default_parent = bpy.props.StringProperty("Default Parent", default="root")
         params.inject = bpy.props.BoolProperty("Inject", description="Inject this rig into Parent Rig", default=False)
     @classmethod
     def parameters_ui(cls, layout, params):
@@ -118,6 +131,7 @@ class Rig(BaseRig):
             layout_widget_dropdown(layout, params, 'widget_selection', text="Widget")
             layout.prop(params,'make_pivot', text="Make Pivot")
             layout.prop(params, 'parents', text="Parents")
+            layout.prop(params, 'default_parent', text="Default Parent")
             layout.prop(params, 'inject', text="Inject into parent")
         row = layout.row()
         row.prop(params,'make_deformer', text="Make Deformer")
