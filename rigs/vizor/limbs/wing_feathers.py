@@ -1,11 +1,14 @@
-import bpy
+''''import bpy
 from bpy.types import PoseBone
 from itertools import count
 
-from rigify.base_rig import BaseRig, stage
+from rigify.base_rig import BaseRig, stage, RigComponent
 from rigify.utils.misc import ArmatureObject, map_list
 from rigify.utils.rig import is_rig_base_bone, connected_children_names
 from rigify.utils.naming import make_derived_name
+from ....utils.feathers import BuildFeatherSystem
+from math import pi
+from mathutils import Vector
 
 def bone_siblings(obj: ArmatureObject, bone: str) -> list[str]:
     """ Returns a list of the siblings of the given bone.
@@ -26,9 +29,11 @@ def bone_siblings(obj: ArmatureObject, bone: str) -> list[str]:
     return bones
 
 class Rig(BaseRig):
-    '''This is a Feather Rig. A set of sibling bones that are looking stretch bone influenced by two controll bones.
-       Plugin for this type of rig is used to add another set of intermediary bones to controll a bunch of siblings.
-    '''
+    #This is a Feather Rig. A set of sibling bones that are looking stretch bone influenced by two controll bones.
+
+    cluster_controls = None
+    rig_parent_bone: str
+
     class CtrlBones(BaseRig.CtrlBones):
         first: str
         last: str
@@ -43,6 +48,10 @@ class Rig(BaseRig):
         'Rig.MchBones',
         list[str]
     ]
+            
+    def create_cluster_control(self):
+        return FeathersClusterControls(self)
+
 
     def find_org_bones(self, bone: PoseBone) -> list[str]:
         base_head = bone.bone.head
@@ -57,8 +66,12 @@ class Rig(BaseRig):
     def initialize(self):
         if len(self.bones.org) < 2:
             self.raise_error("Input to rig type must be two or more siblings")
+        self.rig_parent_bone = self.get_bone_parent(self.base_bone)
         self.first_org = self.bones.org[0]
         self.last_org = self.bones.org[-1]
+        #collect feather rigs and add sub_object to them so it can create rig from this cluster instance
+        if self.cluster_controls is None:
+            self.create_cluster_control()
 
     # Master and secondary controlls
     @stage.generate_bones
@@ -101,3 +114,62 @@ class Rig(BaseRig):
         self.bones.deform = map_list(self.make_target_bone, count(0), self.bones.org[1:-1])
     def make_target_bone(self, i: int, bone: str):
         self.copy_bone(bone, make_derived_name(bone, 'mch', '_target'))
+
+class FeathersClusterControls(RigComponent):
+    owner: Rig
+    org_rig_list: dict[str, Rig] = {} #org parent of the rig basebone
+    rig_count: int
+    main_bone: str
+
+    def __init__(self, owner: Rig):
+        super().__init__(owner)
+        self.find_cluster_rigs()
+        self.sort_cluster_rigs()
+    #def _sort_cluster_rigs(self, )
+    def sort_cluster_rigs(self):
+        pass
+        #_sort_cluster_rigs()
+    def find_cluster_rigs(self):
+        owner = self.owner
+        owner.cluster_controls = self
+        
+        self.org_rig_list[owner.rig_parent_bone] = owner
+
+        parent_rig = owner.rigify_parent
+        if parent_rig:
+            for rig in parent_rig.rigify_children:
+                if isinstance(rig, Rig) and rig != owner:
+                    rig.cluster_controls = self
+                    self.org_rig_list[rig.rigify_parent] = rig
+        else:
+            self.raise_error("Parent rig is required for this rig type to function properly")
+        
+        self.rig_count = len(self.org_rig_list)
+    
+    #UTILITY
+    def generate_bones(self):
+        for rig in self.org_rig_list:
+            
+            #get bones from rigs
+            bone = self.get_bones()
+            bone2 = _bones.get_bone(obj, bone2_name)
+
+            # Ensure mid bone exists
+            bone_mid_name = 'bone_mid'
+            if obj.data.edit_bones.find(bone_mid_name) == -1:
+                bone_mid = _bones.get_bone(_bones.new_bone(obj, bone_mid_name))
+            else:
+                bone_mid = _bones.get_bone(obj, bone_mid_name)
+
+            # Apply interpolated position and rotation
+            angle = compute_mid_vector(obj, [bone, bone2])
+            bone_mid.head = bone.tail
+            bone_mid.tail = bone_mid.head - angle
+            bone_mid.roll = 0
+    
+    def compute_mid_vector(self, bones) -> _bones.Vector:
+    lo_vector = bones[1].vector
+    tot_vector = bones[1].tail - bones[0].head
+    return (lo_vector.project(tot_vector) - lo_vector).normalized() * tot_vector.length
+
+'''
