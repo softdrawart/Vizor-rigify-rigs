@@ -118,10 +118,10 @@ class Rig(BaseRig):
     @stage.parent_bones
     def parent_tip_mch(self):
         mch = self.bones.mch.tip
-        parent = self.rigify_parent.bones.deform
+        parent = self.rigify_parent.bones.ctrl
         self.set_bone_parent(mch[0], self.rig_parent_parent_bone)
-        self.set_bone_parent(mch[1], parent[1])
-        self.set_bone_parent(mch[2], parent[2])
+        self.set_bone_parent(mch[-2], parent.neck)
+        self.set_bone_parent(mch[-1], parent.head)
     @stage.rig_bones
     def rig_tip_mch_bones(self):
         mch = self.bones.mch.tip
@@ -198,7 +198,8 @@ class Rig(BaseRig):
         parents = self.rigify_parent.bones.deform
         for i, child, parent in zip(count(0), children, parents):
             if i == 0:
-                self.set_bone_parent(children[0], make_derived_name(self.rig_parent_parent_bone,'def'))
+                parent = self.rigify_parent.rigify_parent.bones.org[-1]
+                self.set_bone_parent(children[0], make_derived_name(parent,'def'))
             else:
                 self.set_bone_parent(child, parent)
     ##############################
