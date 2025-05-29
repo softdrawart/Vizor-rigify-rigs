@@ -44,6 +44,9 @@ class Rig(pawRig):
     ]
 
     ####################################################
+    def make_ik_control_bone(self, orgs: list[str]):
+        return self.make_paw_ik_control_bone(orgs[-2], orgs[-1], orgs[-2])  
+      
     # IK controls  org_one = 2nd toe bone from end org_two = 1st hoof bone from start
     def make_paw_ik_control_bone(self, org_one: str, org_two: str, org_name: str):
         name = self.copy_bone(org_two, make_derived_name(org_name, 'ctrl', '_ik'))

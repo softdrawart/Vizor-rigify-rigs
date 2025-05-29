@@ -75,7 +75,7 @@ class Rig(BaseRig):
         self.build_parent_switch(name)
 
     def make_master_control_bone(self, orgs: list[str]):
-        name = self.copy_bone(orgs[0], 'body')
+        name = self.copy_bone(orgs[0], 'torso')
         put_bone(self.obj, name, self.get_bone(orgs[0]).head)
         align_bone_to_axis(self.obj, name, 'y', length=self.length * 0.6)
         return name
@@ -170,8 +170,8 @@ class Rig(BaseRig):
     def rig_mch_control_bones(self):
         mch = self.bones.mch
         fk = self.bones.ctrl
-        self.make_constraint(mch.pivot, 'COPY_LOCATION', fk.chest[1])
-        self.make_constraint(mch.pivot, 'COPY_LOCATION', fk.hips[0], influence=0.5)
+        self.make_constraint(mch.pivot, 'COPY_TRANSFORMS', fk.chest[1])
+        self.make_constraint(mch.pivot, 'COPY_TRANSFORMS', fk.hips[0], influence=0.5)
         self.make_constraint(mch.pivot, 'DAMPED_TRACK', fk.chest[1])
 
     ####################################################

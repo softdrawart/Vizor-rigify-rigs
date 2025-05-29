@@ -9,19 +9,25 @@ from typing import Optional
 
 from rigify.utils.bones import align_chain_x_axis, align_bone_orientation
 from rigify.utils.widgets_basic import create_circle_widget
+from rigify.utils.widgets import layout_widget_dropdown, create_registered_widget
 from rigify.utils.layers import ControlLayersOption
 from rigify.utils.naming import make_derived_name, strip_org
+from rigify.utils.misc import map_list
+from rigify.rigs.basic.raw_copy import RelinkConstraintsMixin
 
 from rigify.base_rig import stage
 
 from rigify.rigs.chain_rigs import TweakChainRig
 
 
-class Rig(TweakChainRig):
+class Rig(TweakChainRig, RelinkConstraintsMixin):
     copy_rotation_axes: tuple[bool, bool, bool]
     automate: bool
     separate_rotation: bool
     prop_bone: str
+    min_chain_length = 1
+    create_tweaks: bool
+    create_ctrl: bool
 
     class MchBones(TweakChainRig.MchBones):
         rot: str
@@ -38,6 +44,8 @@ class Rig(TweakChainRig):
 
         self.copy_rotation_axes = self.params.copy_rotation_axes
         self.separate_rotation = self.params.separate_rotation
+        self.create_tweaks = self.params.create_tweaks
+        self.create_ctrl = self.params.create_ctrl
         if True not in self.copy_rotation_axes:
             self.automate = False
         else:
@@ -47,33 +55,82 @@ class Rig(TweakChainRig):
     def prepare_bones(self):
         if self.params.roll_alignment == "automatic":
             align_chain_x_axis(self.obj, self.bones.org)
+    
+    ##############################
+    # Control chain
+
+    @stage.generate_bones
+    def make_control_chain(self):
+        if self.create_ctrl:
+            super().make_control_chain()
+    
+    @stage.configure_bones
+    def configure_control_chain(self):
+        if self.create_ctrl:
+            super().configure_control_chain()
+    
+    @stage.generate_widgets
+    def make_control_widgets(self):
+        if self.create_ctrl:
+            super().make_control_widgets()
+
+    def make_control_widget(self, i: int, ctrl: str):
+        #create_circle_widget(self.obj, ctrl, radius=0.3, head_tail=0.5)
+        if self.create_ctrl:
+            create_registered_widget(self.obj, ctrl, self.params.fk_widget, radius=0.3, head_tail=0.5)
+    ##############################
+    # Tweak chain
+
+    @stage.generate_bones
+    def make_tweak_chain(self):
+        if self.create_tweaks:
+            super().make_tweak_chain()
+
+    @stage.parent_bones
+    def parent_tweak_chain(self):
+        if self.create_tweaks:
+            super().parent_tweak_chain()
+
+    @stage.generate_widgets
+    def make_tweak_widgets(self):
+        if self.create_tweaks:
+            super().make_tweak_widgets()
+
+    ##############################
+    # ORG chain
 
     # Parent
     @stage.parent_bones
     def parent_control_chain(self):
         # use_connect=False for backward compatibility
-        self.parent_bone_chain(self.bones.ctrl.fk, use_connect=False)
+        if self.create_ctrl:
+            self.parent_bone_chain(self.bones.ctrl.fk, use_connect=False)
+        elif self.separate_rotation:
+            self.set_bone_parent(self.bones.org[0], self.bones.mch.rot)
 
     # Configure
     @stage.configure_bones
     def configure_tweak_chain(self):
-        super().configure_tweak_chain()
+        if self.create_tweaks:
+            super().configure_tweak_chain()
 
-        ControlLayersOption.TWEAK.assign(self.params, self.obj, self.bones.ctrl.tweak)
+            ControlLayersOption.TWEAK.assign(self.params, self.obj, self.bones.ctrl.tweak)
 
     def configure_tweak_bone(self, i, tweak):
-        super().configure_tweak_bone(i, tweak)
+        if self.create_tweaks:
+            super().configure_tweak_bone(i, tweak)
 
-        # Backward compatibility
-        self.get_bone(tweak).rotation_mode = 'QUATERNION'
+            # Backward compatibility
+            self.get_bone(tweak).rotation_mode = 'QUATERNION'
 
     # Rig
     @stage.rig_bones
     def rig_control_chain(self):
-        if self.automate:
-            ctrls = self.bones.ctrl.fk
-            for args in zip(count(0), ctrls, [None, *ctrls]):
-                self.rig_control_bone(*args)
+        if self.create_ctrl:
+            if self.automate:
+                ctrls = self.bones.ctrl.fk
+                for args in zip(count(0), ctrls, [None, *ctrls]):
+                    self.rig_control_bone(*args)
 
     def rig_control_bone(self, _i: int, ctrl: str, prev_ctrl: Optional[str]):
         if prev_ctrl:
@@ -83,9 +140,6 @@ class Rig(TweakChainRig):
                 space='LOCAL', mix_mode='BEFORE',
             )
 
-    # Widgets
-    def make_control_widget(self, i: int, ctrl: str):
-        create_circle_widget(self.obj, ctrl, radius=0.3, head_tail=0.5)
 
     ####################################################
     # Rotation follow
@@ -98,7 +152,7 @@ class Rig(TweakChainRig):
     
     @stage.parent_bones
     def parent_mch_control_bones(self):
-        if self.separate_rotation:
+        if self.separate_rotation and self.create_ctrl:
             self.set_bone_parent(self.bones.ctrl.fk[0], self.bones.mch.rot)
 
     @stage.parent_bones
@@ -108,19 +162,41 @@ class Rig(TweakChainRig):
 
     @stage.configure_bones
     def configure_mch_follow_bones(self):
-        if self.separate_rotation:
+        if self.separate_rotation and self.create_ctrl:
             controls = self.bones.ctrl.fk
             panel = self.script.panel_with_selected_check(self, controls)
             self.make_property(self.bones.ctrl.fk[0], 'root_follow', default=0.0)
             panel.custom_prop(self.bones.ctrl.fk[0], 'root_follow', text='root_follow', slider=True)
 
-    @stage.rig_bones
-    def rig_mch_follow_bones(self):
+#    @stage.rig_bones
+#    def rig_mch_follow_bones(self):
+
+    def rig_bones(self):
         if self.separate_rotation:
             con = self.make_constraint(self.bones.mch.rot, 'COPY_ROTATION', 'root')
 
-            self.make_driver(con, 'influence',
+            if self.create_ctrl:
+                self.make_driver(con, 'influence',
                             variables=[(self.bones.ctrl.fk[0], 'root_follow')], polynomial=[1, -1])
+            
+    ##############################
+    #ORG bones RIG
+    @stage.rig_bones
+    def rig_org_chain(self):
+        if self.separate_rotation:
+            org = self.bones.org[0]
+            #if relink constraint
+            self.relink_bone_constraints(org)
+            self.relink_move_constraints(org, self.bones.mch.rot, prefix='')
+
+        if self.create_tweaks:
+            super().rig_org_chain()
+        elif self.create_ctrl:
+            ctrls = self.bones.ctrl.fk
+            for args in zip(count(0), self.bones.org, ctrls):
+                self.rig_org_bone(*args)
+    def rig_org_bone(self, i: int, org: str, ctrl: str):
+        self.make_constraint(org, 'COPY_TRANSFORMS', ctrl)
 
     @classmethod
     def add_parameters(cls, params):
@@ -144,6 +220,24 @@ class Rig(TweakChainRig):
             description='Add MCH to copy Rotation from Root bone',
             default=False
         )
+        params.create_tweaks = bpy.props.BoolProperty(
+            name='create tweaks',
+            description='create tweak bones',
+            default=False
+        )
+        params.create_ctrl = bpy.props.BoolProperty(
+            name='create fk',
+            description='create fk bones',
+            default=True
+        )
+        
+        params.fk_widget = bpy.props.StringProperty(
+            name='widget fk select',
+            description='select fk widget',
+            default='circle'
+        )
+
+        cls.add_relink_constraints_params(params)
 
     @classmethod
     def parameters_ui(cls, layout, params):
@@ -159,7 +253,26 @@ class Rig(TweakChainRig):
 
         row = layout.row()
         row.prop(params, 'separate_rotation')
-        ControlLayersOption.TWEAK.parameters_ui(layout, params)
+        if params.separate_rotation:
+            cls.add_relink_constraints_ui(layout, params)
+            if params.relink_constraints:
+                col = layout.column()
+                col.label(text="All Constraints are moved to MCH bone", icon='INFO')
+        
+
+        layout.prop(params, 'create_ctrl')
+        if params.create_ctrl:
+            layout_widget_dropdown(layout, params, 'fk_widget')
+
+            #option to create tweaks
+            layout.prop(params, 'create_tweaks')
+            if params.create_tweaks:
+                ControlLayersOption.TWEAK.parameters_ui(layout, params)
+        
+
+        
+        
+        
 
 
 def create_sample(obj):
